@@ -1,0 +1,137 @@
+
+import psycopg
+
+connection_string = "postgresql://neondb_owner:npg_lKwY2oEmZv7C@ep-delicate-feather-aeddzh8x-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+conn = psycopg.connect(connection_string)
+cursor = conn.cursor()
+
+create_table_query="""
+CREATE TABLE IF NOT EXISTS students (
+    id INTEGER PRIMARY KEY,
+    name TEXT,
+    age float
+)"""
+
+cursor.execute(create_table_query)
+conn.commit()
+
+
+def validate_input(user_input):
+    if not user_input.strip():
+        print("Error:Input Cannot be empty")
+        return None 
+    
+    values=user_input.split()
+
+    if len(values)!=3:
+        print("Error:Each entry contains exactly 3 values Id Name Age")
+    id_value=values[0]
+    name_value=values[1]
+    age_value=values[2]
+
+    try:
+        student_id=int(id_value)
+    except ValueError:
+        print("Error:ID must be an integer")
+        return None 
+
+    if student_id<=0:
+        print("Error:Id must be greater than 0")
+        return None 
+
+    if name_value == "":
+        print("Error: Name cannot be empty.")
+        return None
+
+    if not any(character.isalpha() for character in name_value):
+        print("Error: Name cannot contain only numbers.")
+        return None
+
+    try:
+        age_value = float(age_value)
+    except ValueError:
+        print("Error: Age must be a valid floating-point number.")
+        return None
+    
+    if age_value < 0:
+        print("Error: Age cannot be negative.")
+        return None
+    return [student_id, name_value, age_value]
+
+
+def check_user(IdsList):
+
+    placeholders = ", ".join(["%s"] * len(IdsList))
+
+    query = f"""
+    SELECT id
+    FROM students
+    WHERE id IN ({placeholders})
+    """
+
+    cursor.execute(query, IdsList)
+
+    result = cursor.fetchall()
+
+    existing_ids = [row[0] for row in result]
+
+    return existing_ids
+
+def add_users(list1, list2, list3):
+
+    insert_query = """
+    INSERT INTO students (id, name, age)
+    VALUES (%s, %s, %s)
+    """
+
+    cursor.execute(insert_query, list1)
+    cursor.execute(insert_query, list2)
+    cursor.execute(insert_query, list3)
+
+    conn.commit()
+
+    print("All 3 users inserted successfully.")
+
+input1 = input("Enter first student (ID NAME AGE): ")
+input2 = input("Enter second student (ID NAME AGE): ")
+input3 = input("Enter third student (ID NAME AGE): ")
+
+list1 = validate_input(input1)
+list2 = validate_input(input2)
+list3 = validate_input(input3)
+
+if list1 is None or list2 is None or list3 is None:
+
+    print("Data validation failed.")
+    print("Nothing was inserted.")
+
+else:
+
+    IdsList = [list1[0], list2[0], list3[0]]
+
+    if len(IdsList) != len(set(IdsList)):
+
+        print("Error: Duplicate IDs found in the new inputs.")
+        print("Nothing was inserted.")
+
+    else:
+        existing_ids = check_user(IdsList)
+        if len(existing_ids) > 0:
+            print("Error: The following ID(s) already exist:")
+            print(existing_ids)
+            print("Nothing was inserted.")
+
+        else:
+            try:
+
+                add_users(list1, list2, list3)
+
+            except Exception as e:
+
+                conn.rollback()
+
+                print("Error while inserting users.")
+                print(e)
+
+cursor.close()
+conn.close()
